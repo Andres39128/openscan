@@ -1,0 +1,9 @@
+OpenScan es un escáner de documentos gratis y privado.
+
+• Batch multi-página con detección de bordes
+• Filtros, re-corte manual y PDF con texto buscable
+• OCR offline (español + inglés) y búsqueda en tu librería
+• Firma, backup cifrado y bloqueo biométrico
+• Sin cuenta, sin nube, sin anuncios, sin marcas de agua
+
+Tus documentos nunca salen de tu teléfono.

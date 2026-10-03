@@ -1,0 +1,1 @@
+Primera versión: escaneo, OCR offline, PDF buscable y backup cifrado.

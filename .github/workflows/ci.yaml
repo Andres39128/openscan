@@ -1,0 +1,91 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          # Congelada en F1 (PLAN §3). Cambiarla = ADR + aviso.
+          flutter-version: '3.47.2'
+          channel: stable
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter analyze
+      - run: flutter test --coverage
+      - name: coverage gates (RULES §4, excluye *.g.dart)
+        run: |
+          python3 - <<'EOF'
+          from pathlib import Path
+          from collections import defaultdict
+          import sys
+          hits = defaultdict(lambda: [0, 0])
+          cur = ""
+          for ln in Path("coverage/lcov.info").read_text().splitlines():
+              if ln.startswith("SF:"):
+                  cur = ln[3:]
+              elif ln.startswith("DA:"):
+                  n = int(ln.split(":", 1)[1].split(",")[1])
+                  for d in ("lib/domain/", "lib/data/"):
+                      if d in cur and not cur.endswith(".g.dart"):
+                          hits[d][0] += 1
+                          hits[d][1] += 1 if n > 0 else 0
+          gates = {"lib/domain/": 100.0, "lib/data/": 70.0}
+          ok = True
+          for d, (f, h) in sorted(hits.items()):
+              pct = 100 * h / f
+              print(f"{d}: {h}/{f} = {pct:.1f}% (gate {gates[d]}%)")
+              ok = ok and pct >= gates[d]
+          sys.exit(0 if ok else 1)
+          EOF
+
+  build-android:
+    needs: analyze-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter build appbundle --flavor prod --target lib/main_prod.dart --release
+      - name: size gate (PLAN §5 — AAB <80MB)
+        run: |
+          AAB=$(ls build/app/outputs/bundle/prodRelease/*.aab | head -1)
+          BYTES=$(stat -c%s "$AAB")
+          echo "AAB: $AAB ($BYTES bytes)"
+          test "$BYTES" -lt 83886080
+
+  integration-android:
+    needs: analyze-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+      - run: flutter pub get
+      - name: integration en emulador (F4, sin cámara)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          script: flutter test integration_test --flavor dev

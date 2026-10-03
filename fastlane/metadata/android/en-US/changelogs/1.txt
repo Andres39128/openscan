@@ -1,0 +1,1 @@
+First release: scanning, offline OCR, searchable PDF and encrypted backup.
