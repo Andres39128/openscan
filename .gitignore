@@ -49,3 +49,7 @@ app.*.map.json
 
 # El gitignore global excluye data/; el dominio lo necesita.
 !lib/data/
+
+# Capturas de debug, jamás al repo.
+shot-debug.png
+*-debug.png
