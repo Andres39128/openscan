@@ -89,7 +89,12 @@ class ExportService {
       DocumentsCompanion(pageCount: Value(pages.length)),
     );
 
-    final pdfBytes = await buildSearchablePdf(inputs);
+    late Uint8List pdfBytes;
+    try {
+      pdfBytes = await buildSearchablePdf(inputs);
+    } on Object catch (_) {
+      throw const PdfFailed();
+    }
     final out = File(p.join(docsDir.path, exportFileName(title, now)));
     await out.writeAsBytes(pdfBytes, flush: true);
     await SharePlus.instance.share(

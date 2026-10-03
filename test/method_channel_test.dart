@@ -61,6 +61,22 @@ void main() {
       expect(dto.blocks.single.text, 'Hola');
     });
 
+    test('falla una vez y reintenta con éxito', () async {
+      var calls = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(ocrChannel, (call) async {
+        calls++;
+        if (calls == 1) throw PlatformException(code: 'OCR_FAILED');
+        return {
+          'fullText': 'Reintento',
+          'blocks': [],
+        };
+      });
+      final dto = await ocr.recognizeText('a.jpg', ['es']);
+      expect(dto.fullText, 'Reintento');
+      expect(calls, 2);
+    });
+
     test('null y error → OcrFailed', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(ocrChannel, (call) async => null);

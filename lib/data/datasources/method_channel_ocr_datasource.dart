@@ -16,6 +16,17 @@ class MethodChannelOcrDataSource implements OcrDataSource {
     List<String> langs,
   ) async {
     try {
+      return await _once(imagePath, langs);
+    } on OcrFailed {
+      // Primer uso descarga el modelo: un reintento tras 2s.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      return await _once(imagePath, langs);
+    }
+  }
+
+  /// Un intento de OCR con timeout (RULES §1: 10s).
+  Future<OcrResultDto> _once(String imagePath, List<String> langs) async {
+    try {
       final raw = await ocrChannel.invokeMapMethod<String, Object?>(
         'recognizeText',
         {'path': imagePath, 'langs': langs},
