@@ -125,7 +125,16 @@ class _HomePageState extends ConsumerState<HomePage> {
   /// Escanea (con permiso) y abre el viewer con el batch.
   Future<void> _scan(BuildContext context, WidgetRef ref) async {
     final pages = await scanWithPermission(context, ref);
-    if (pages == null || pages.isEmpty) return;
+    if (pages == null) return;
+    if (pages.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sin páginas: confirmá con ✓ en el scanner'),
+        ),
+      );
+      return;
+    }
     ref.read(currentBatchProvider.notifier).all = pages;
     if (!context.mounted) return;
     context.go('/viewer');

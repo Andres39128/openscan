@@ -188,12 +188,13 @@ class _CropEditorPageState extends ConsumerState<CropEditorPage> {
     setState(() => _busy = true);
     try {
       final batch = [...ref.read(currentBatchProvider)];
-      final out = await ref
-          .read(scanRepositoryProvider)
-          .recrop(batch[widget.index], _quad);
-      batch[widget.index] = out;
+      final repo = ref.read(scanRepositoryProvider);
+      final out = await repo.recrop(batch[widget.index], _quad);
+      // El usuario pudo volver atrás durante el warp: nada de ref tras esto.
+      if (!mounted) return;
       ref.read(currentBatchProvider.notifier).replaceAt(widget.index, out);
-      if (mounted) context.pop();
+      if (!context.mounted) return;
+      context.pop();
     } on AppFailure {
       if (!mounted) return;
       setState(() => _busy = false);

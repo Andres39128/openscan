@@ -93,7 +93,16 @@ class DocumentViewerPage extends ConsumerWidget {
   /// Escanea más páginas y las agrega al batch.
   Future<void> _addMore(BuildContext context, WidgetRef ref) async {
     final pages = await scanWithPermission(context, ref);
-    if (pages == null || pages.isEmpty) return;
+    if (pages == null) return;
+    if (pages.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sin páginas: confirmá con ✓ en el scanner'),
+        ),
+      );
+      return;
+    }
     ref.read(currentBatchProvider.notifier).addAll(pages);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
