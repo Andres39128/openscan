@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# El gitignore global excluye data/; el dominio lo necesita.
+!lib/data/
