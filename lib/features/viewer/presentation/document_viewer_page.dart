@@ -11,9 +11,14 @@ import 'package:openscan/domain/entities/scanned_page.dart';
 import 'package:openscan/features/enhance/filter/apply_filter.dart';
 import 'package:openscan/features/export/application/export_providers.dart';
 import 'package:openscan/features/library/application/library_providers.dart';
+import 'package:openscan/features/ocr/application/ocr_providers.dart';
+import 'package:openscan/features/ocr/application/ocr_results_provider.dart';
 import 'package:openscan/features/scan/application/scan_actions.dart';
 import 'package:openscan/features/scan/application/scan_providers.dart';
+import 'package:openscan/features/viewer/presentation/progress_dialog.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 /// Viewer F2: reordenar + borrar + recortar + agregar páginas.
 class DocumentViewerPage extends ConsumerWidget {
@@ -28,6 +33,15 @@ class DocumentViewerPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text('Documento (${batch.length})'),
         actions: [
+          IconButton(
+            tooltip: 'Reconocer texto (OCR)',
+            icon: const Icon(Icons.abc),
+            onPressed: batch.isEmpty
+                ? null
+                : () async {
+                    await _runOcr(context, ref, batch);
+                  },
+          ),
           IconButton(
             tooltip: 'Exportar PDF',
             icon: const Icon(Icons.picture_as_pdf),
@@ -58,7 +72,10 @@ class DocumentViewerPage extends ConsumerWidget {
                         const Icon(Icons.broken_image),
                   ),
                   title: Text('Página ${i + 1}'),
-                  subtitle: Text('${page.width}×${page.height}'),
+                  subtitle: Text(
+                    '${page.width}×${page.height}'
+                    '${_ocrBadge(ref, page)}',
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -109,6 +126,10 @@ class DocumentViewerPage extends ConsumerWidget {
       SnackBar(content: Text('Agregadas: ${pages.length}')),
     );
   }
+
+  /// Sufijo ABC cuando la página ya tiene OCR.
+  String _ocrBadge(WidgetRef ref, ScannedPage page) =>
+      ref.watch(ocrResultsProvider).containsKey(page.id) ? ' • ABC' : '';
 
   /// Vista completa con zoom + filtros (el archivo se reemplaza).
   Future<void> _preview(BuildContext context, WidgetRef ref, int index) async {
@@ -215,61 +236,100 @@ class DocumentViewerPage extends ConsumerWidget {
   }
 
   /// Exporta el batch a PDF searchable y lo comparte.
+  /// OCR explícito con progreso: downscale + reconoce + cachea.
+  /// Las páginas que fallan quedan sin índice (se reporta X de Y).
+  Future<void> _runOcr(
+    BuildContext context,
+    WidgetRef ref,
+    List<ScannedPage> batch,
+  ) async {
+    final engine = ref.read(ocrEngineProvider);
+    final cache = ref.read(ocrResultsProvider.notifier);
+    var ok = 0;
+    await runWithProgress<void>(
+      context,
+      'Reconociendo texto…',
+      batch.length,
+      (done) async {
+        for (final page in batch) {
+          try {
+            final bytes = await File(page.imagePath).readAsBytes();
+            final small = await downscaleForOcr(bytes);
+            final ocr = await engine.recognize(small);
+            cache.put(page.id, ocr);
+            ok++;
+          } on AppFailure {
+            continue;
+          } finally {
+            done.value++;
+          }
+        }
+      },
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('OCR listo: $ok de ${batch.length} páginas')),
+    );
+  }
+
+  /// Exporta vía bottom sheet: usa el OCR cacheado, comparte al final.
   Future<void> _export(
     BuildContext context,
     WidgetRef ref,
     List<ScannedPage> batch,
   ) async {
     final controller = TextEditingController(text: 'Escaneo');
-    final title = await showDialog<String>(
+    final indexed =
+        batch.where((p) => ref.read(ocrResultsProvider).containsKey(p.id));
+    final title = await showModalBottomSheet<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Exportar PDF'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Título'),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Exportar PDF',
+              style: Theme.of(ctx).textTheme.titleLarge,
+            ),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Título'),
+            ),
+            const SizedBox(height: 8),
+            Text('${batch.length} páginas • ${indexed.length} con OCR'),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(controller.text),
+              child: const Text('GENERAR PDF'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('CANCELAR'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('EXPORTAR'),
-          ),
-        ],
       ),
     );
     controller.dispose();
     if (title == null || title.trim().isEmpty || !context.mounted) return;
-    unawaited(
-      showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Dialog(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Row(
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Text('Generando PDF…'),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
     try {
       final db = await ref.read(appDbProvider.future);
-      await ref.read(exportServiceProvider).exportBatch(
-            db: db,
-            pages: batch,
-            title: title.trim(),
-            now: DateTime.now(),
-          );
+      final docsDir = await getApplicationDocumentsDirectory();
+      if (!context.mounted) return;
+      final file = await runWithProgress<File>(
+        context,
+        'Generando PDF…',
+        0,
+        (_) async => await ref.read(exportServiceProvider).exportBatch(
+              db: db,
+              docsDir: docsDir,
+              pages: batch,
+              ocrByPage: ref.read(ocrResultsProvider),
+              title: title.trim(),
+              now: DateTime.now(),
+            ),
+      );
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], text: title.trim()),
+      );
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('PDF listo y compartido')),
@@ -279,10 +339,6 @@ class DocumentViewerPage extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_exportError(e))),
       );
-    } finally {
-      if (context.mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
     }
   }
 

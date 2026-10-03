@@ -57,26 +57,43 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: Column(
         children: [
-          const SizedBox(height: 12),
-          dbState.when(
-            data: (_) => const Text('DB cifrada: OK'),
-            loading: () => const Text('Abriendo DB cifrada…'),
-            error: (e, _) => Text('DB error: $e'),
-          ),
-          const SizedBox(height: 8),
-          countState.when(
-            data: (n) => Text('Documentos: $n'),
-            loading: () => const Text('Documentos: …'),
-            error: (e, _) => Text('Conteo error: $e'),
-          ),
-          if (flavor.isOss)
-            const Text(
-              'Variante F-Droid: captura manual y sin OCR.',
-              style: TextStyle(fontStyle: FontStyle.italic),
-            ),
-          const SizedBox(height: 12),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_user, size: 32),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          dbState.when(
+                            data: (_) =>
+                                const Text('DB cifrada: OK'),
+                            loading: () =>
+                                const Text('Abriendo DB cifrada…'),
+                            error: (e, _) => Text('DB error: $e'),
+                          ),
+                          countState.when(
+                            data: (n) => Text('Documentos: $n'),
+                            loading: () =>
+                                const Text('Documentos: …'),
+                            error: (e, _) =>
+                                Text('Conteo error: $e'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: TextField(
               controller: _search,
               decoration: const InputDecoration(
@@ -87,19 +104,36 @@ class _HomePageState extends ConsumerState<HomePage> {
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
-          const SizedBox(height: 8),
           Expanded(
             child: results.when(
               data: (docs) => docs.isEmpty
                   ? const Center(
-                      child: Text('Sin resultados. Exportá para indexar.'),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.manage_search,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 8),
+                          Text('Sin resultados. Exportá para indexar.'),
+                        ],
+                      ),
                     )
                   : ListView.builder(
                       itemCount: docs.length,
-                      itemBuilder: (context, i) => ListTile(
-                        leading: const Icon(Icons.picture_as_pdf),
-                        title: Text(docs[i].title),
-                        subtitle: Text('${docs[i].pageCount} págs'),
+                      itemBuilder: (context, i) => Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        child: ListTile(
+                          leading: const Icon(Icons.picture_as_pdf),
+                          title: Text(docs[i].title),
+                          subtitle:
+                              Text('${docs[i].pageCount} págs'),
+                        ),
                       ),
                     ),
               loading: () =>
@@ -107,17 +141,14 @@ class _HomePageState extends ConsumerState<HomePage> {
               error: (e, _) => Center(child: Text('Búsqueda error: $e')),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 24),
-            child: FilledButton.icon(
-              icon: const Icon(Icons.document_scanner),
-              label: const Text('Escanear'),
-              onPressed: () async {
-                await _scan(context, ref);
-              },
-            ),
-          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.document_scanner),
+        label: const Text('Escanear'),
+        onPressed: () async {
+          await _scan(context, ref);
+        },
       ),
     );
   }

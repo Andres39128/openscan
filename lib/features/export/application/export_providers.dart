@@ -6,25 +6,24 @@ import 'package:openscan/core/pdf/searchable_pdf.dart';
 import 'package:openscan/core/result/app_failure.dart';
 import 'package:openscan/core/text/slugify.dart';
 import 'package:openscan/data/db/app_db.dart';
+import 'package:openscan/domain/entities/ocr_result.dart';
 import 'package:openscan/domain/entities/scanned_page.dart';
-import 'package:openscan/domain/repositories/ocr_engine.dart';
-import 'package:openscan/features/ocr/application/ocr_providers.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
-/// Orquesta export: OCR → PDF searchable → guarda + indexa → comparte.
+/// Orquesta export: PDF searchable → guarda + indexa. Sin share (lo hace UI).
+/// El OCR viene ya reconocido (explícito, nunca a escondidas).
+/// Sin OCR para una página: sale solo-imagen.
 /// Indexa en `ocr_blocks` (los triggers FTS hacen el resto).
 class ExportService {
-  /// Crea el servicio sobre el motor OCR activo.
-  const new(this._ocr);
-
-  final OcrEngine _ocr;
+  /// Crea el servicio.
+  const new();
 
   /// Exporta el batch y devuelve el PDF. Lanza [AppFailure] en error.
   Future<File> exportBatch({
     required AppDb db,
+    required Directory docsDir,
     required List<ScannedPage> pages,
+    required Map<String, OcrResult> ocrByPage,
     required String title,
     required DateTime now,
   }) async {
@@ -39,7 +38,6 @@ class ExportService {
           ),
         );
 
-    final docsDir = await getApplicationDocumentsDirectory();
     final pagesDir = Directory('${docsDir.path}/pages');
     await pagesDir.create(recursive: true);
 
@@ -52,7 +50,8 @@ class ExportService {
       final bytes = await File(page.imagePath).readAsBytes();
       await File(storedPath).writeAsBytes(bytes, flush: true);
       final size = await decodeSize(bytes);
-      final ocr = await _ocr.recognize(bytes);
+      final ocr =
+          ocrByPage[page.id] ?? const OcrResult(fullText: '', blocks: []);
       inputs.add(
         SearchablePage(
           jpeg: bytes,
@@ -97,14 +96,12 @@ class ExportService {
     }
     final out = File(p.join(docsDir.path, exportFileName(title, now)));
     await out.writeAsBytes(pdfBytes, flush: true);
-    await SharePlus.instance.share(
-      ShareParams(files: [XFile(out.path)], text: title),
-    );
     return out;
   }
 }
 
 /// Servicio de exportación activo.
+/// Servicio de exportación activo.
 final exportServiceProvider = Provider<ExportService>(
-  (ref) => ExportService(ref.watch(ocrEngineProvider)),
+  (ref) => const ExportService(),
 );

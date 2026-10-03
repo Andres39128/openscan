@@ -69,7 +69,7 @@ void main() {
         if (calls == 1) throw PlatformException(code: 'OCR_FAILED');
         return {
           'fullText': 'Reintento',
-          'blocks': [],
+          'blocks': <Object?>[],
         };
       });
       final dto = await ocr.recognizeText('a.jpg', ['es']);
