@@ -13,6 +13,8 @@ Future<List<ScannedPage>?> scanWithPermission(
   if (!await ensureCameraReady(context)) return null;
   try {
     return await ref.read(scanDocumentsProvider).call();
+  } on Cancelled {
+    return null;
   } on AppFailure {
     if (!context.mounted) return null;
     ScaffoldMessenger.of(context).showSnackBar(

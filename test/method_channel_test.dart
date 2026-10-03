@@ -23,6 +23,14 @@ void main() {
       expect(await scan.scanDocuments(), isEmpty);
     });
 
+    test('BUSY (doble tap) → Cancelled silencioso', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(scanChannel, (call) async {
+        throw PlatformException(code: 'BUSY');
+      });
+      expect(scan.scanDocuments(), throwsA(isA<Cancelled>()));
+    });
+
     test('PlatformException → ScannerUnavailable', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(scanChannel, (call) async {

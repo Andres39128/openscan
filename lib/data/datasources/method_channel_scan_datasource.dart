@@ -16,7 +16,9 @@ class MethodChannelScanDataSource implements ScanDataSource {
           .invokeListMethod<String>('scanDocuments')
           .timeout(scanTimeout);
       return paths ?? [];
-    } on PlatformException {
+    } on PlatformException catch (e) {
+      // Doble tap con scanner abierto: es cancelación, no error.
+      if (e.code == 'BUSY') throw const Cancelled();
       throw const ScannerUnavailable();
     } on TimeoutException {
       throw const ScannerUnavailable();
