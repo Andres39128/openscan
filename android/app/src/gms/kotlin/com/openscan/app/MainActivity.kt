@@ -1,4 +1,4 @@
-package com.openscan.openscan
+package com.openscan.app
 
 import android.app.Activity
 import android.net.Uri

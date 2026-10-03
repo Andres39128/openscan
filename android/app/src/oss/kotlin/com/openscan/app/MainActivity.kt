@@ -1,4 +1,4 @@
-package com.openscan.openscan
+package com.openscan.app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
